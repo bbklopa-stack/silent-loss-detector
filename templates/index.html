@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silent Loss Detector</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #eaf3fc; --card: #ffffff; --soft: #f2f7fd;
+            --blue-dark: #0b3967; --blue-main: #1565c0; --blue-light: #dcebfa;
+            --text: #0f2942; --muted: #4d6b8a; --danger: #c62828; --ok: #0e7490;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 24px 14px; font-family: "Cairo", sans-serif;
+            background: linear-gradient(135deg, #dfeefb 0%, #f3f8fe 100%); color: var(--text);
+        }
+        .container {
+            max-width: 1060px; margin: 0 auto; background: var(--card);
+            border: 1px solid var(--blue-light); border-radius: 16px; padding: 26px;
+            box-shadow: 0 10px 28px rgba(11, 57, 103, 0.08);
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center; gap: 12px;
+            flex-wrap: wrap; border-bottom: 2px solid var(--blue-light); padding-bottom: 16px; margin-bottom: 20px;
+        }
+        .brand-wrap {
+            display: inline-flex; flex-direction: column; align-items: flex-start;
+            direction: ltr; margin-right: auto;
+        }
+        .title {
+            margin: 0; font-size: 15px; font-weight: 800; color: var(--blue-dark);
+            font-style: italic; transform: skewX(-10deg) translateY(5px);
+            position: relative; z-index: 2; padding-left: 4px;
+        }
+        .cloud-badge {
+            width: 82px; height: 22px; background: #e3f2fd; border: 1px solid #90caf9;
+            border-radius: 999px; position: relative; box-shadow: 0 2px 6px rgba(21, 101, 192, 0.12);
+        }
+        .cloud-badge::before {
+            content: ""; position: absolute; width: 26px; height: 26px; background: #e3f2fd;
+            border-top: 1px solid #90caf9; border-left: 1px solid #90caf9;
+            border-radius: 50%; top: -11px; left: 12px;
+        }
+        .cloud-badge::after {
+            content: ""; position: absolute; width: 20px; height: 20px; background: #e3f2fd;
+            border-top: 1px solid #90caf9; border-right: 1px solid #90caf9;
+            border-radius: 50%; top: -8px; right: 14px;
+        }
+        .sub { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+        .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .badge { background: var(--blue-light); color: var(--blue-dark); padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+        .btn-link {
+            text-decoration: none; color: var(--blue-main); background: var(--soft);
+            border: 1px solid var(--blue-light); padding: 6px 12px; border-radius: 8px;
+            font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+        }
+        .toolbar {
+            display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+            background: var(--soft); border: 1px solid var(--blue-light); padding: 12px 14px;
+            border-radius: 12px; margin-bottom: 18px;
+        }
+        select, input[type="file"], input[type="number"], input[type="text"], .search-input {
+            border: 1px solid #b8d4f0; border-radius: 8px; padding: 8px 10px;
+            font-family: inherit; background: #fff; color: var(--text);
+        }
+        .search-input { padding: 6px 11px; font-size: 12.5px; min-width: 190px; }
+        .btn-primary {
+            background: linear-gradient(135deg, #1e88e5, var(--blue-dark)); color: #fff;
+            border: none; border-radius: 8px; padding: 9px 18px; font-family: inherit; font-weight: 700; cursor: pointer;
+        }
+        .btn-outline {
+            background: #fff; color: var(--blue-dark); border: 1px solid #9ec5ea;
+            border-radius: 8px; padding: 9px 16px; font-family: inherit; font-weight: 700; cursor: pointer;
+        }
+        .btn-filter.active { background: #fff5f6; color: var(--danger); border-color: #f5b7b1; }
+        .insight-bar { display: grid; grid-template-columns: 1fr 1.6fr; gap: 12px; margin-bottom: 18px; }
+        .insight-card {
+            background: var(--soft); border: 1px solid var(--blue-light);
+            border-right: 4px solid var(--blue-main); border-radius: 12px; padding: 12px 14px; font-size: 13px;
+        }
+        .insight-card.danger { border-right-color: var(--danger); background: #fff5f6; }
+        .insight-card.ok { border-right-color: var(--ok); background: #f2fbfd; }
+        .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+        .kpi { background: var(--soft); border: 1px solid var(--blue-light); border-right: 4px solid var(--blue-main); border-radius: 12px; padding: 16px; }
+        .kpi.danger { border-right-color: var(--danger); background: #fff5f6; }
+        .kpi-title { font-size: 12.5px; color: var(--muted); }
+        .kpi-val { font-size: 22px; font-weight: 800; margin-top: 4px; color: var(--blue-dark); }
+        .kpi.danger .kpi-val { color: var(--danger); }
+        .recs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+        .rec-card { background: var(--soft); border: 1px solid var(--blue-light); border-right: 4px solid var(--blue-main); border-radius: 12px; padding: 13px 14px; }
+        .rec-card.danger { border-right-color: var(--danger); background: #fff5f6; }
+        .rec-card.ok { border-right-color: var(--ok); background: #f2fbfd; }
+        .rec-title { font-size: 13px; font-weight: 800; color: var(--blue-dark); margin-bottom: 4px; }
+        .rec-card.danger .rec-title { color: var(--danger); }
+        .rec-card.ok .rec-title { color: var(--ok); }
+        .rec-detail { font-size: 12.5px; color: var(--text); line-height: 1.5; }
+        .calc-box {
+            background: var(--soft); border: 1px solid var(--blue-light); border-radius: 12px;
+            padding: 14px; margin-bottom: 22px;
+        }
+        .calc-grid { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+        .calc-grid input[type="number"] { width: 125px; padding: 6px 10px; font-size: 12.5px; }
+        .calc-grid input[type="text"] { width: 175px; padding: 6px 10px; font-size: 12.5px; }
+        .calc-out { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-top: 10px; }
+        .charts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 26px; }
+        .chart-box { background: var(--soft); border: 1px solid var(--blue-light); border-radius: 12px; padding: 14px; }
+        .chart-box h3 { margin: 0 0 10px; font-size: 14.5px; color: var(--blue-dark); }
+        .canvas-wrap { position: relative; height: 240px; background: #fff; border-radius: 8px; padding: 8px; }
+        h2 { font-size: 16px; color: var(--blue-dark); margin: 0 0 10px; }
+        .history-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .history-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .btn-clear { padding: 6px 12px; font-size: 12.5px; color: var(--danger); border-color: #f5b7b1; }
+        .table-box { overflow-x: auto; border: 1px solid var(--blue-light); border-radius: 12px; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #e6f0fa; }
+        th { background: var(--blue-light); color: var(--blue-dark); }
+        tr:last-child td { border-bottom: none; }
+        .loss { color: var(--danger); font-weight: 700; }
+        .ok { color: var(--ok); font-weight: 700; }
+        .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; background: #e3f2fd; color: var(--blue-dark); border: 1px solid #90caf9; }
+        @media (max-width: 800px) {
+            .insight-bar, .kpis, .recs, .charts { grid-template-columns: 1fr; }
+            .brand-wrap { margin-right: 0; }
+        }
+        @media print {
+            body { background: #fff; padding: 0; }
+            .container { box-shadow: none; border: none; padding: 0; }
+            .toolbar, .btn-link, .history-actions, .calc-box { display: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="header">
+        <div>
+            <p class="sub" style="margin-top: 0;">
+                الحساب: <strong>{{ company_name or "حساب مجاني" }}</strong> —
+                الباقة: <strong>{{ plan_name or "وصول مجاني كامل" }}</strong>
+                (ملفات: {{ uploads_used or 0 }})
+            </p>
+            <div class="actions" style="margin-top: 8px;">
+                <span class="badge">القطاع: {{ report.sector_title }}</span>
+                <a href="/plans" class="btn-link">الحساب المجاني</a>
+                <a href="/logout" class="btn-link">خروج</a>
+            </div>
+        </div>
+        <div class="brand-wrap">
+            <h1 class="title">Silent Loss Detector</h1>
+            <span class="cloud-badge" aria-hidden="true"></span>
+        </div>
+    </header>
+
+    {% for _, msg in get_flashed_messages(with_categories=true) %}
+        <div class="flash">{{ msg }}</div>
+    {% endfor %}
+
+    <form method="POST" enctype="multipart/form-data" class="toolbar">
+        <label for="sector">النشاط:</label>
+        <select id="sector" name="sector">
+            <option value="clothing" {% if selected_sector == 'clothing' %}selected{% endif %}>متاجر الملابس</option>
+            <option value="restaurants" {% if selected_sector == 'restaurants' %}selected{% endif %}>المطاعم والكافيهات</option>
+            <option value="pharmacies" {% if selected_sector == 'pharmacies' %}selected{% endif %}>الصيدليات</option>
+            <option value="distribution" {% if selected_sector == 'distribution' %}selected{% endif %}>شركات التوزيع</option>
+        </select>
+        <input type="file" name="file" accept=".csv">
+        <button type="submit" class="btn-primary">تشغيل التدقيق</button>
+        <button type="button" class="btn-outline" onclick="window.print()">طباعة / PDF</button>
+    </form>
+
+    <section class="calc-box">
+        <h2 style="margin: 0;">إضافة منتجاتك المخصصة حسب نشاطك ({{ custom_count }} مضافة)</h2>
+        <form method="POST" action="/add-product" class="calc-grid">
+            <input type="hidden" name="sector" value="{{ selected_sector }}">
+            <input type="text" name="prod_name" placeholder="اسم المنتج (مثال: بنادول)" required>
+            <input type="number" name="prod_cost" step="0.01" placeholder="الشراء ($)" required>
+            <input type="number" name="prod_extra" step="0.01" placeholder="إضافية ($)" required>
+            <input type="number" name="prod_price" step="0.01" placeholder="البيع ($)" required>
+            <button type="submit" class="btn-primary" style="padding: 7px 14px;">إضافة للتدقيق</button>
+        </form>
+        {% if custom_count > 0 %}
+        <form method="POST" action="/clear-custom-products" style="margin-top: 8px;">
+            <button type="submit" class="btn-outline" style="padding: 5px 12px; font-size: 12px;">إزالة المنتجات اليدوية</button>
+        </form>
+        {% endif %}
+    </section>
+
+    <section class="insight-bar">
+        <div class="insight-card {{ health.state }}">
+            <strong>المؤشر الصحي للتدقيق:</strong> {{ health.score }} / 100 ({{ health.label }})
+        </div>
+        <div class="insight-card">
+            {% if comparison %}
+                <strong>مقارنة مع سجل ({{ comparison.prev_time }} — {{ comparison.prev_sector }}):</strong>
+                فارق الانحراف: <span class="{{ 'loss' if comparison.leak_diff > 0 else 'ok' }}">{{ '+' if comparison.leak_diff > 0 else '' }}${{ comparison.leak_diff }}</span> —
+                فارق المنتجات الخاسرة: <span class="{{ 'loss' if comparison.losing_diff > 0 else 'ok' }}">{{ '+' if comparison.losing_diff > 0 else '' }}{{ comparison.losing_diff }}</span>
+            {% else %}
+                <strong>المقارنة العملية:</strong> احفظ أو شغّل عملية تدقيق إضافية لمقارنة النتائج مع سجل سابق.
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="kpis">
+        <div class="kpi danger">
+            <div class="kpi-title">إجمالي انحراف المصروفات الشاذة</div>
+            <div class="kpi-val">${{ report.total_expense_leak }}</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-title">فترات تراجع المبيعات</div>
+            <div class="kpi-val">{{ report.slump_days | join(' — ') }}</div>
+        </div>
+        <div class="kpi danger">
+            <div class="kpi-title">منتجات ذات هامش سالب</div>
+            <div class="kpi-val">{{ report.losing_products_count }}</div>
+        </div>
+    </section>
+
+    {% if recommendations %}
+    <section class="recs">
+        {% for rec in recommendations %}
+        <div class="rec-card {{ rec.type }}">
+            <div class="rec-title">{{ rec.title }}</div>
+            <div class="rec-detail">{{ rec.detail }}</div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="calc-box">
+        <h2 style="margin: 0;">حاسبة التسعير السريعة للمنتجات الخاسرة</h2>
+        <div class="calc-grid">
+            <label for="calcCost">التكلفة الكلية ($):</label>
+            <input type="number" id="calcCost" step="0.1" value="0">
+            <label for="calcPrice">سعر البيع الحالي ($):</label>
+            <input type="number" id="calcPrice" step="0.1" value="0">
+            <label for="calcMargin">ربح مستهدف ($):</label>
+            <input type="number" id="calcMargin" step="0.1" value="5">
+            <button type="button" id="calcBtn" class="btn-primary" style="padding: 7px 14px;">احسب</button>
+        </div>
+        <div id="calcResult" class="calc-out"></div>
+    </section>
+
+    <section class="charts">
+        <div class="chart-box">
+            <h3>المصروفات: الطبيعي مقابل الفعلي</h3>
+            <div class="canvas-wrap"><canvas id="expChart"></canvas></div>
+        </div>
+        <div class="chart-box">
+            <h3>صافي الربح أو الخسارة للمنتجات ($)</h3>
+            <div class="canvas-wrap"><canvas id="profChart"></canvas></div>
+        </div>
+    </section>
+
+    <h2>المصروفات ومقارنتها بالمعيار الطبيعي</h2>
+    <div class="table-box">
+        <table>
+            <thead>
+                <tr><th>البند</th><th>المعيار</th><th>الفعلي</th><th>الفارق</th><th>التصنيف</th></tr>
+            </thead>
+            <tbody>
+                {% for exp in report.expenses %}
+                <tr>
+                    <td>{{ exp.item }}</td>
+                    <td>${{ exp.normal }}</td>
+                    <td>${{ exp.actual }}</td>
+                    <td>+${{ exp.diff }}</td>
+                    <td class="{{ 'loss' if exp.is_abnormal else 'ok' }}">
+                        {{ 'انحراف مرتفع' if exp.is_abnormal else 'ضمن الحدود' }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="history-head">
+        <h2 style="margin: 0;">تحليل تكلفة المنتج مقابل سعر البيع</h2>
+        <div class="history-actions">
+            <input type="text" id="prodSearch" class="search-input" placeholder="ابحث باسم المنتج...">
+            <button type="button" id="lossFilterBtn" class="btn-outline btn-filter" style="padding: 6px 12px; font-size: 12.5px;">الخاسرة فقط</button>
+            <form method="POST" action="/export-products" enctype="multipart/form-data" style="margin: 0;">
+                <input type="hidden" name="sector" value="{{ selected_sector }}">
+                <button type="submit" class="btn-link">تصدير المنتجات CSV</button>
+            </form>
+        </div>
+    </div>
+    <div class="table-box">
+        <table id="productsTable">
+            <thead>
+                <tr><th>المنتج</th><th>الشراء</th><th>إضافية</th><th>الكلية</th><th>البيع</th><th>النتيجة</th></tr>
+            </thead>
+            <tbody>
+                {% for prod in report.products %}
+                <tr data-loss="{{ '1' if prod.net_profit < 0 else '0' }}">
+                    <td>{{ prod.name }}</td>
+                    <td>${{ prod.cost }}</td>
+                    <td>${{ prod.extra }}</td>
+                    <td>${{ prod.real_cost }}</td>
+                    <td>${{ prod.price }}</td>
+                    <td class="{{ 'loss' if prod.net_profit < 0 else 'ok' }}">${{ prod.net_profit }} ({{ prod.status }})</td>
+                </tr>
+                {% endfor %}
+                <tr id="noMatchesRow" style="display: none;">
+                    <td colspan="6" style="text-align: center; color: var(--muted);">لا توجد منتجات مطابقة للبحث أو الفلتر الحالي.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% if recent_runs %}
+    <div class="history-head">
+        <h2 style="margin: 0;">سجل عمليات التدقيق المحفوظة (SQLite)</h2>
+        <div class="history-actions">
+            <a href="/export-history" class="btn-link">تحميل السجل CSV</a>
+            <form method="POST" action="/clear-history" style="margin: 0;">
+                <button type="submit" class="btn-outline btn-clear">مسح السجل</button>
+            </form>
+        </div>
+    </div>
+    <div class="table-box">
+        <table>
+            <thead>
+                <tr><th>التاريخ والوقت</th><th>الحساب</th><th>القطاع</th><th>انحراف المصروفات</th><th>فترات التراجع</th><th>منتجات بخسارة</th></tr>
+            </thead>
+            <tbody>
+                {% for run in recent_runs %}
+                <tr>
+                    <td>{{ run.created_at }}</td>
+                    <td>{{ run.company_name }}</td>
+                    <td>{{ run.sector_title }}</td>
+                    <td class="loss">${{ run.total_expense_leak }}</td>
+                    <td>{{ run.slump_days }}</td>
+                    <td class="loss">{{ run.losing_products_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<script id="audit-data" type="application/json">
+{
+    "expLabels": {{ report.expenses | map(attribute="item") | list | tojson }},
+    "expNormal": {{ report.expenses | map(attribute="normal") | list | tojson }},
+    "expActual": {{ report.expenses | map(attribute="actual") | list | tojson }},
+    "prodLabels": {{ report.products | map(attribute="name") | list | tojson }},
+    "prodCosts": {{ report.products | map(attribute="real_cost") | list | tojson }},
+    "prodPrices": {{ report.products | map(attribute="price") | list | tojson }},
+    "prodProfits": {{ report.products | map(attribute="net_profit") | list | tojson }}
+}
+</script>
+<script>
+(function () {
+    const calcCost = document.getElementById("calcCost");
+    const calcPrice = document.getElementById("calcPrice");
+    const calcMargin = document.getElementById("calcMargin");
+    const calcBtn = document.getElementById("calcBtn");
+    const calcResult = document.getElementById("calcResult");
+
+    function runCalc() {
+        if (!calcCost || !calcPrice || !calcMargin || !calcResult) return;
+        const cost = parseFloat(calcCost.value) || 0;
+        const price = parseFloat(calcPrice.value) || 0;
+        const margin = parseFloat(calcMargin.value) || 0;
+        const currentProfit = +(price - cost).toFixed(2);
+        const minPrice = +(cost + margin).toFixed(2);
+        const neededIncrease = +(Math.max(0, minPrice - price)).toFixed(2);
+
+        calcResult.textContent =
+            `الربح/الخسارة الحالية: $${currentProfit} | السعر المقترح للربح المستهدف: $${minPrice} | زيادة مطلوبة على السعر: +$${neededIncrease}`;
+    }
+
+    const raw = JSON.parse(document.getElementById("audit-data").textContent);
+
+    function syncCalcWithAudit() {
+        if (!calcCost || !calcPrice) return;
+        const lossIdx = (raw.prodProfits || []).findIndex(v => Number(v) < 0);
+        if (lossIdx !== -1) {
+            calcCost.value = Number(raw.prodCosts[lossIdx] || 0);
+            calcPrice.value = Number(raw.prodPrices[lossIdx] || 0);
+        }
+        runCalc();
+    }
+
+    if (calcBtn) calcBtn.addEventListener("click", runCalc);
+    [calcCost, calcPrice, calcMargin].forEach(el => {
+        if (el) el.addEventListener("input", runCalc);
+    });
+    syncCalcWithAudit();
+
+    const searchInput = document.getElementById("prodSearch");
+    const filterBtn = document.getElementById("lossFilterBtn");
+    const prodRows = Array.from(document.querySelectorAll("#productsTable tbody tr[data-loss]"));
+    const noMatchesRow = document.getElementById("noMatchesRow");
+    let onlyLoss = false;
+
+    function applyProductFilter() {
+        const q = (searchInput ? searchInput.value : "").trim().toLowerCase();
+        let visibleCount = 0;
+        prodRows.forEach(row => {
+            const nameText = (row.cells[0] ? row.cells[0].textContent : "").toLowerCase();
+            const isLoss = row.getAttribute("data-loss") === "1";
+            const show = (!q || nameText.includes(q)) && (!onlyLoss || isLoss);
+            row.style.display = show ? "" : "none";
+            if (show) visibleCount += 1;
+        });
+        if (noMatchesRow) noMatchesRow.style.display = visibleCount === 0 ? "" : "none";
+    }
+
+    if (searchInput) searchInput.addEventListener("input", applyProductFilter);
+    if (filterBtn) {
+        filterBtn.addEventListener("click", function () {
+            onlyLoss = !onlyLoss;
+            filterBtn.classList.toggle("active", onlyLoss);
+            filterBtn.textContent = onlyLoss ? "عرض كل المنتجات" : "الخاسرة فقط";
+            applyProductFilter();
+        });
+    }
+
+    if (typeof Chart === "undefined") return;
+    Chart.defaults.font.family = '"Cairo", sans-serif';
+
+    function grad(ctx, c1, c2) {
+        const g = ctx.createLinearGradient(0, 0, 0, 220);
+        g.addColorStop(0, c1);
+        g.addColorStop(1, c2);
+        return g;
+    }
+
+    const expEl = document.getElementById("expChart");
+    if (expEl) {
+        const ctx = expEl.getContext("2d");
+        window.expChartInstance = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: raw.expLabels,
+                datasets: [
+                    { label: "الطبيعي ($)", data: raw.expNormal, backgroundColor: grad(ctx, "#42a5f5", "#bbdefb"), borderRadius: 8 },
+                    { label: "الفعلي ($)", data: raw.expActual, backgroundColor: grad(ctx, "#0d47a1", "#64b5f6"), borderRadius: 8 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    const profEl = document.getElementById("profChart");
+    if (profEl) {
+        const ctx = profEl.getContext("2d");
+        const bg = raw.prodProfits.map(v => v < 0 ? grad(ctx, "#e53935", "#ffcdd2") : grad(ctx, "#0288d1", "#b3e5fc"));
+        window.profChartInstance = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: raw.prodLabels,
+                datasets: [{ label: "صافي الربح ($)", data: raw.prodProfits, backgroundColor: bg, borderRadius: 8 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    // تكيف الرسم البياني للمنتجات والمصروفات تلقائياً مع ما يكتبه المستخدم في سعر البيع والإضافات
+    function bindLiveProductInputs() {
+        const addForm = document.querySelector('form[action="/add-product"]');
+        if (!addForm) return;
+        const nameInput = addForm.querySelector('input[name="prod_name"]');
+        const costInput = addForm.querySelector('input[name="prod_cost"]');
+        const extraInput = addForm.querySelector('input[name="prod_extra"]');
+        const priceInput = addForm.querySelector('input[name="prod_price"]');
+        let hasDraftPoint = false;
+
+        function syncLiveChart() {
+            if (typeof Chart === "undefined" || !profEl) return;
+            const c = parseFloat(costInput && costInput.value) || 0;
+            const ex = parseFloat(extraInput && extraInput.value) || 0;
+            const pr = parseFloat(priceInput && priceInput.value) || 0;
+            const nm = (nameInput && nameInput.value.trim()) || "منتج قيد الإدخال";
+
+            const labels = [...raw.prodLabels];
+            const profits = [...raw.prodProfits];
+
+            if (c !== 0 || ex !== 0 || pr !== 0 || (nameInput && nameInput.value.trim() !== "")) {
+                const netProfit = +(pr - (c + ex)).toFixed(2);
+                labels.push(nm);
+                profits.push(netProfit);
+                hasDraftPoint = true;
+
+                if (calcCost) calcCost.value = +(c + ex).toFixed(2);
+                if (calcPrice) calcPrice.value = pr;
+                runCalc();
+            } else if (hasDraftPoint) {
+                hasDraftPoint = false;
+            }
+
+            if (window.profChartInstance) {
+                const pCtx = profEl.getContext("2d");
+                window.profChartInstance.data.labels = labels;
+                window.profChartInstance.data.datasets[0].data = profits;
+                window.profChartInstance.data.datasets[0].backgroundColor = profits.map(v =>
+                    v < 0 ? grad(pCtx, "#e53935", "#ffcdd2")
+                          : grad(pCtx, "#0288d1", "#b3e5fc")
+                );
+                window.profChartInstance.update();
+            }
+
+            if (window.expChartInstance && expEl) {
+                const eCtx = expEl.getContext("2d");
+                const extraPerItem = ex / Math.max(raw.expActual.length, 1);
+                const liveActual = raw.expActual.map(v => +(Number(v) + extraPerItem).toFixed(2));
+                window.expChartInstance.data.datasets[1].data = liveActual;
+                window.expChartInstance.update();
+            }
+        }
+
+        [nameInput, costInput, extraInput, priceInput].forEach(inp => {
+            if (inp) inp.addEventListener("input", syncLiveChart);
+        });
+    }
+
+    bindLiveProductInputs();
+})();
+</script>
+</body>
+</html>
+           
